@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mesh/pages/splash/splash_page.dart';
+import 'package:mesh/routes/routes.dart';
 import 'package:mesh/ui/colors.dart';
 
 class App extends StatelessWidget {
@@ -7,6 +9,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      routes: AppRoutes.routes,
       theme: ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -20,11 +23,7 @@ class App extends StatelessWidget {
 
       scaffoldBackgroundColor: AppColors.background,
     ),
-      home: Scaffold(
-        body: Center(
-          child: Text("Hello Mesh!"),
-        ),
-      ),
+      home: SplashPage(),
     );
   }
 }
