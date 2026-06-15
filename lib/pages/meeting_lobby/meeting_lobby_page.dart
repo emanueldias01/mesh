@@ -1,10 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:mesh/pages/meeting/room_page_arguments.dart';
+import 'package:mesh/pages/meeting_lobby/meeting_lobby_page_viewmodel.dart';
 import 'package:mesh/ui/colors.dart';
 import 'package:mesh/ui/text_styles.dart';
 import 'package:mesh/widgets/principal_button.dart';
 
-class MeetingLobbyPage extends StatelessWidget {
+class MeetingLobbyPage extends StatefulWidget {
   const MeetingLobbyPage({super.key});
+
+  @override
+  State<MeetingLobbyPage> createState() => _MeetingLobbyPageState();
+}
+
+class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
+
+  final viewmodel = MeetingLobbyPageViewmodel();
+
+  @override
+  void initState() {
+    super.initState();
+    viewmodel.addListener(() {
+      setState(() {
+        
+      });
+    });
+  }
+  @override
+  void dispose() {
+    viewmodel.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +79,7 @@ class MeetingLobbyPage extends StatelessWidget {
               const SizedBox(height: 10),
 
               TextField(
+                controller: viewmodel.meetingCodeController,
                 decoration: InputDecoration(
                   hintText: "Enter meeting code",
                   filled: true,
@@ -71,10 +97,35 @@ class MeetingLobbyPage extends StatelessWidget {
 
               const SizedBox(height: 20),
 
+              
+
               PrincipalButton(
-                text: "Join Meeting",
-                onTap: () {},
+                text: "Join a Meeting",
+                onTap: () async {
+                  final foundMeeting = await viewmodel.joinMeeting();
+
+                  if(foundMeeting) {
+                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.meetingCodeController.text));
+                  }else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                        viewmodel.errorMessage,
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      backgroundColor: Colors.red,
+                      )
+                    );
+                  }
+                },
               ),
+
+              const SizedBox(height: 16),
+
+              if (viewmodel.isLoading)
+                const Center(
+                  child: CircularProgressIndicator(),
+                ),
 
               const SizedBox(height: 30),
 
