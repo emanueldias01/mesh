@@ -12,7 +12,7 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
   String errorMessage = "";
 
 
-  Future<bool> joinMeeting() async {
+  Future<bool> joinRoom() async {
   isLoading = true;
   errorMessage = "";
   notifyListeners();
@@ -57,7 +57,7 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
 }
 
 
-  Future<bool> createMeeting() async {
+  Future<bool> createRoom() async {
     isLoading = true;
     notifyListeners();
     errorMessage = "";

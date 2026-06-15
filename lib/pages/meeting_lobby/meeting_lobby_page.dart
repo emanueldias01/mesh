@@ -126,7 +126,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
               PrincipalButton(
                 text: "Join a Meeting",
                 onTap: () async {
-                  final foundMeeting = await viewmodel.joinMeeting();
+                  final foundMeeting = await viewmodel.joinRoom();
 
                   if(foundMeeting) {
                     Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.meetingCodeController.text));
@@ -179,7 +179,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
 
               OutlinedButton.icon(
                 onPressed: () async {
-                  final createRoom = await viewmodel.createMeeting();
+                  final createRoom = await viewmodel.createRoom();
                   if(createRoom){
                     Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: "54321"));
                   }else {
