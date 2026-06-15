@@ -10,7 +10,7 @@ class ChatMessage {
   ChatMessage({required this.from, required this.text});
 }
 
-class RoomPageViewmodel extends ChangeNotifier {
+class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   WebSocketChannel? _channel;
   String _roomId = "";
   String _userId = "";
@@ -23,6 +23,7 @@ class RoomPageViewmodel extends ChangeNotifier {
   MediaStream? localStream;
   bool isAudioEnabled = true;
   bool isVideoEnabled = true;
+  bool _wasVideoEnabledBeforeBackground = true;
 
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, MediaStream> remoteStreams = {};
@@ -33,7 +34,38 @@ class RoomPageViewmodel extends ChangeNotifier {
     ],
   };
 
+  RoomPageViewmodel() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   bool get isConnected => _channel != null;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (localStream == null || !isConnected) return;
+
+    if (state == AppLifecycleState.paused) {
+      // 1. Tela desligou ou app foi pro segundo plano
+      _wasVideoEnabledBeforeBackground = isVideoEnabled;
+      if (isVideoEnabled) {
+        _setVideoTrackEnabled(false);
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // 2. O usuário desbloqueou o celular e voltou pro app
+      if (_wasVideoEnabledBeforeBackground) {
+        _setVideoTrackEnabled(true);
+      }
+      notifyListeners();
+    }
+  }
+
+  void _setVideoTrackEnabled(bool enabled) {
+    localStream?.getVideoTracks().forEach((track) {
+      track.enabled = enabled;
+    });
+    isVideoEnabled = enabled;
+    notifyListeners();
+  }
 
   Future<void> connectRoom(String roomId, String userId) async {
     isLoading = true;
@@ -139,12 +171,10 @@ class RoomPageViewmodel extends ChangeNotifier {
     final pc = await createPeerConnection(_iceServers);
     _peerConnections[peerId] = pc;
 
-    // CORREÇÃO: Usando addTrack ao invés de addStream
     localStream?.getTracks().forEach((track) {
       pc.addTrack(track, localStream!);
     });
 
-    // CORREÇÃO: Escutando onTrack ao invés de onAddStream
     pc.onTrack = (RTCTrackEvent event) {
       if (event.streams.isNotEmpty) {
         remoteStreams[peerId] = event.streams[0];
@@ -278,6 +308,7 @@ class RoomPageViewmodel extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     disconnectFromRoom();
     super.dispose();
   }

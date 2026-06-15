@@ -252,7 +252,7 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   Widget _buildControlBar(RoomPageViewmodel viewmodel) {
-    return Container(
+    return SafeArea(child: Container(
       color: const Color(0xFF202124),
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -281,7 +281,7 @@ class _RoomPageState extends State<RoomPage> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _controlButton({
@@ -301,7 +301,6 @@ class _RoomPageState extends State<RoomPage> {
   }
 }
 
-// NOVO: Widget isolado para controlar o ciclo de vida do renderizador de vídeo
 class StreamVideoTile extends StatefulWidget {
   final MediaStream stream;
   final String label;
