@@ -1,5 +1,7 @@
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:mesh/constants/env.dart';
 
 class MeetingLobbyPageViewmodel extends ChangeNotifier{
   final meetingCodeController = TextEditingController();
@@ -11,44 +13,84 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
 
 
   Future<bool> joinMeeting() async {
-    isLoading = true;
+  isLoading = true;
+  errorMessage = "";
+  notifyListeners();
+
+  if (callerIdController.text.isEmpty) {
+    errorMessage = "Your caller ID is empty";
+    isLoading = false;
     notifyListeners();
+    return false;
+  }
 
-    //simula verificacao se sala existe para entrar
-    await Future.delayed(const Duration(seconds: 1));
+  try {
+    final url = Uri.parse('${Env.apiUrl}/rooms/${meetingCodeController.text}');
+    
+    final response = await http.get(url).timeout(const Duration(seconds: 10));
 
-    if(callerIdController.text.isEmpty) {
-      errorMessage = "Your caller ID is empyt";
-      isLoading = false;
-      notifyListeners();
-      return false;
-    }
-
-    if(meetingCodeController.text == "12345") {
+    if (response.statusCode == 200) {
       isLoading = false;
       errorMessage = "";
       notifyListeners();
-        
       return true;
-    }else {
+    } else if (response.statusCode == 404) {
       isLoading = false;
       meetingCodeController.text = "";
-      notifyListeners();
       errorMessage = "No rooms found";
+      notifyListeners();
+      return false;
+    } else {
+      isLoading = false;
+      meetingCodeController.text = "";
+      errorMessage = "Internal Server error: ${response.statusCode}";
+      notifyListeners();
       return false;
     }
-
+  } catch (error) {
+    isLoading = false;
+    meetingCodeController.text = "";
+    errorMessage = "Connection error. Please try again.";
+    notifyListeners();
+    return false;
   }
+}
+
 
   Future<bool> createMeeting() async {
     isLoading = true;
     notifyListeners();
+    errorMessage = "";
 
-    //simula criação de sala 
-    await Future.delayed(const Duration(seconds: 1));
+    if (callerIdController.text.isEmpty) {
+      errorMessage = "Your caller ID is empty";
+      isLoading = false;
+      notifyListeners();
+      return false;
+    }
+    
+    try {
+      final url = Uri.parse('${Env.apiUrl}/rooms');
 
-    isLoading = false;
-    notifyListeners();
-    return true;
+      final response = await http.post(url).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 201) {
+        isLoading = false;
+        errorMessage = "";
+        notifyListeners();
+        return true;
+      } else {
+        isLoading = false;
+        meetingCodeController.text = "";
+        errorMessage = "Internal Server error: ${response.statusCode}";
+        notifyListeners();
+        return false;
+      }
+    } catch (error) {
+      isLoading = false;
+      meetingCodeController.text = "";
+      errorMessage = "Connection error. Please try again.";
+      notifyListeners();
+      return false;
+    }
   }
 }
