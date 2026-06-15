@@ -9,35 +9,71 @@ class SplashPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(
-              top: 80,
-              bottom: 40,
-            ),
-            child: Image.asset("assets/images/logo.png")
-          ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 800;
 
-            Text("Start Meeting with any people", 
-              style: AppTextStyles.mediumText
-            ),
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 600,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    children: [
+                      const Spacer(),
 
-            SizedBox(height: 10),
+                      Image.asset(
+                        "assets/images/logo.png",
+                        width: isDesktop
+                            ? 300
+                            : constraints.maxWidth * 0.5,
+                      ),
 
-            Text(
-              "Right Now!",
-              style: AppTextStyles.bigText.copyWith(color: AppColors.textPrimary)
-            ),
+                      const SizedBox(height: 40),
 
-            SizedBox(height: 200),
+                      Text(
+                        "Start Meeting with any people",
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.mediumText,
+                      ),
 
-            PrincipalButton(
-              text: "Get Started",
-              onTap: () => Navigator.pushNamed(context, "/meeting_lobby"),
-            )
-            
-        ],
+                      const SizedBox(height: 10),
+
+                      Text(
+                        "Right Now!",
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bigText.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrincipalButton(
+                          text: "Get Started",
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            "/meeting_lobby",
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

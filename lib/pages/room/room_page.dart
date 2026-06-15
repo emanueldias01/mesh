@@ -17,15 +17,26 @@ class _RoomPageState extends State<RoomPage> {
 
   final TextEditingController _chatController = TextEditingController();
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_initialized) {
-      final args = ModalRoute.of(context)!.settings.arguments as RoomPageArguments;
-      context.read<RoomPageViewmodel>().connectRoom(args.roomId, args.userId);
-      _initialized = true;
-    }
+ @override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+
+  if (!_initialized) {
+    _initialized = true;
+
+    final args =
+        ModalRoute.of(context)!.settings.arguments as RoomPageArguments;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      context.read<RoomPageViewmodel>().connectRoom(
+        args.roomId,
+        args.userId,
+      );
+    });
   }
+}
 
   @override
   void dispose() {
@@ -98,6 +109,9 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   Widget _buildVideoGrid(RoomPageViewmodel viewmodel) {
+  debugPrint(
+    'REMOTE STREAMS UI => ${viewmodel.remoteStreams.length}',
+  );
     final tiles = <Widget>[];
 
     // Local Video
@@ -114,6 +128,8 @@ class _RoomPageState extends State<RoomPage> {
 
     // Remote Videos
     for (final entry in viewmodel.remoteStreams.entries) {
+      debugPrint("CRIANDO TILE REMOTO => ${entry.key}");
+
       tiles.add(StreamVideoTile(
         key: ValueKey(entry.key),
         stream: entry.value,
@@ -333,7 +349,20 @@ class _StreamVideoTileState extends State<StreamVideoTile> {
 
   Future<void> _initRenderer() async {
     await _renderer.initialize();
+
+    _renderer.onFirstFrameRendered = () {
+      debugPrint("FIRST FRAME => ${widget.label}");
+    };
+
+    _renderer.onResize = () {
+      debugPrint(
+        "RESIZE => ${widget.label} "
+        "${_renderer.videoWidth}x${_renderer.videoHeight}",
+      );
+    };
+
     _renderer.srcObject = widget.stream;
+
     if (mounted) {
       setState(() {
         _initialized = true;

@@ -93,10 +93,13 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
         notifyListeners();
         return false;
       }
-    } catch (error) {
+    } catch (e, stack) {
+      print("ERROR: $e");
+      print("STACK: $stack");
+
       isLoading = false;
       roomCodeController.text = "";
-      errorMessage = "Connection error. Please try again.";
+      errorMessage = e.toString();
       notifyListeners();
       return false;
     }
