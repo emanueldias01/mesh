@@ -1,10 +1,12 @@
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mesh/constants/env.dart';
 
 class MeetingLobbyPageViewmodel extends ChangeNotifier{
-  final meetingCodeController = TextEditingController();
+  final roomCodeController = TextEditingController();
   final callerIdController = TextEditingController();
 
   bool isLoading = false;
@@ -25,7 +27,7 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
   }
 
   try {
-    final url = Uri.parse('${Env.apiUrl}/rooms/${meetingCodeController.text}');
+    final url = Uri.parse('${Env.apiUrl}/rooms/${roomCodeController.text}');
     
     final response = await http.get(url).timeout(const Duration(seconds: 10));
 
@@ -36,20 +38,20 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
       return true;
     } else if (response.statusCode == 404) {
       isLoading = false;
-      meetingCodeController.text = "";
+      roomCodeController.text = "";
       errorMessage = "No rooms found";
       notifyListeners();
       return false;
     } else {
       isLoading = false;
-      meetingCodeController.text = "";
+      roomCodeController.text = "";
       errorMessage = "Internal Server error: ${response.statusCode}";
       notifyListeners();
       return false;
     }
   } catch (error) {
     isLoading = false;
-    meetingCodeController.text = "";
+    roomCodeController.text = "";
     errorMessage = "Connection error. Please try again.";
     notifyListeners();
     return false;
@@ -73,21 +75,27 @@ class MeetingLobbyPageViewmodel extends ChangeNotifier{
       final url = Uri.parse('${Env.apiUrl}/rooms');
 
       final response = await http.post(url).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        if (data['roomId'] != null) {
+          roomCodeController.text = data['roomId'].toString();
+        }
+
         isLoading = false;
         errorMessage = "";
         notifyListeners();
         return true;
       } else {
         isLoading = false;
-        meetingCodeController.text = "";
+        roomCodeController.text = "";
         errorMessage = "Internal Server error: ${response.statusCode}";
         notifyListeners();
         return false;
       }
     } catch (error) {
       isLoading = false;
-      meetingCodeController.text = "";
+      roomCodeController.text = "";
       errorMessage = "Connection error. Please try again.";
       notifyListeners();
       return false;

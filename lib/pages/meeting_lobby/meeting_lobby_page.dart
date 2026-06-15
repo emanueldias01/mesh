@@ -103,7 +103,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
               const SizedBox(height: 10),
 
               TextField(
-                controller: viewmodel.meetingCodeController,
+                controller: viewmodel.roomCodeController,
                 decoration: InputDecoration(
                   hintText: "Enter meeting code",
                   filled: true,
@@ -129,7 +129,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                   final foundMeeting = await viewmodel.joinRoom();
 
                   if(foundMeeting) {
-                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.meetingCodeController.text));
+                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text));
                   }else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -181,7 +181,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                 onPressed: () async {
                   final createRoom = await viewmodel.createRoom();
                   if(createRoom){
-                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: "54321"));
+                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text));
                   }else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text(
@@ -192,7 +192,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                   
                 },
                 icon: const Icon(Icons.video_call),
-                label: const Text("Create Meeting"),
+                label: const Text("Create Room"),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(
                     double.infinity,
