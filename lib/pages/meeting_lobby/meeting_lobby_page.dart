@@ -39,8 +39,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
           padding: const EdgeInsets.symmetric(
             horizontal: 24,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: ListView(
             children: [
 
               Image.asset(
@@ -48,7 +47,6 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                 height: 100,
               ),
 
-              const SizedBox(height: 30),
 
               Text(
                 "Meeting Lobby",
@@ -66,7 +64,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                 ),
               ),
 
-              const SizedBox(height: 50),
+              const SizedBox(height: 24),
 
               Text(
                 "Persnonal ID",
@@ -129,7 +127,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                   final foundMeeting = await viewmodel.joinRoom();
 
                   if(foundMeeting) {
-                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text));
+                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text, userId: viewmodel.callerIdController.text));
                   }else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -151,7 +149,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                   child: CircularProgressIndicator(),
                 ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
               Row(
                 children: [
@@ -175,13 +173,13 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                 ],
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
               OutlinedButton.icon(
                 onPressed: () async {
                   final createRoom = await viewmodel.createRoom();
                   if(createRoom){
-                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text));
+                    Navigator.pushNamed(context, "/room", arguments: RoomPageArguments(roomId: viewmodel.roomCodeController.text, userId: viewmodel.callerIdController.text));
                   }else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text(
