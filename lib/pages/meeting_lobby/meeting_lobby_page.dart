@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:mesh/database/models/address.dart' hide Address;
 import 'package:mesh/pages/room/room_page_arguments.dart';
 import 'package:mesh/pages/meeting_lobby/meeting_lobby_page_viewmodel.dart';
 import 'package:mesh/ui/colors.dart';
@@ -48,10 +50,9 @@ void _showAddAddressModal(BuildContext context, MeetingLobbyPageViewmodel viewmo
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {
-                viewmodel.addServerAddress(); 
-                
-                Navigator.pop(context); 
+              onPressed: () async {
+                await viewmodel.addServerAddress();
+                if (context.mounted) Navigator.pop(context);
               },
               child: const Text("Confirm"),
             ),
@@ -63,21 +64,22 @@ void _showAddAddressModal(BuildContext context, MeetingLobbyPageViewmodel viewmo
 }
 
 class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
-
-  final viewmodel = MeetingLobbyPageViewmodel();
+  late final MeetingLobbyPageViewmodel viewmodel;
 
   @override
   void initState() {
     super.initState();
-    viewmodel.addListener(() {
-      setState(() {});
-    });
-
+    viewmodel = context.read<MeetingLobbyPageViewmodel>();
+    viewmodel.addListener(_onViewmodelChanged);
   }
-  
+
+  void _onViewmodelChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
-    viewmodel.dispose();
+    viewmodel.removeListener(_onViewmodelChanged);
     super.dispose();
   }
 
@@ -96,35 +98,44 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (viewmodel.signalServers.isNotEmpty)
+                        if (viewmodel.isLoadingServers)
+                          const Center(child: CircularProgressIndicator())
+                        else if (viewmodel.signalServers.isNotEmpty)
                           ...viewmodel.signalServers.map((server) {
-                          return Padding(
-                            padding: EdgeInsetsGeometry.all(3),
-                            child: Address(
-                              address: server, 
-                              isSelect: viewmodel.serverAddressSelect == server ? true :  false,
-                              onTap: () {
-                                viewmodel.selectSignalServer(viewmodel.signalServers.indexOf(server));
-                              }
+                            return Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Address(
+                                address: server.address,
+                                isSelect: viewmodel.selectedServer?.id == server.id,
+                                onTap: () {
+                                  viewmodel.selectSignalServer(server);
+                                },
+                                onLongPress: () {
+                                  if (server.id != null) {
+                                    viewmodel.removeAddressById(server.id!);
+                                  }
+                                },
                               ),
-                          );
-                        })
+                            );
+                          })
                         else
                           Text(
                             "Add Server signal address",
-                            style: AppTextStyles.mediumText.copyWith(fontSize: 16)
+                            style: AppTextStyles.mediumText.copyWith(fontSize: 16),
                           ),
                       ],
                     ),
                   ),
                 ),
-                
                 Padding(
                   padding: const EdgeInsets.only(top: 16.0),
-                  child: SecondaryButton(text: "Add Address", icon: Icons.add, onTap: () {
-
-                    _showAddAddressModal(context, viewmodel);
-                  }),
+                  child: SecondaryButton(
+                    text: "Add Address",
+                    icon: Icons.add,
+                    onTap: () {
+                      _showAddAddressModal(context, viewmodel);
+                    },
+                  ),
                 ),
               ],
             ),
@@ -138,9 +149,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
 
             return Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 500,
-                ),
+                constraints: const BoxConstraints(maxWidth: 500),
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: isDesktop ? 32 : 24,
@@ -152,34 +161,21 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                         "assets/images/logo.png",
                         height: isDesktop ? 140 : 100,
                       ),
-
                       const SizedBox(height: 24),
-
                       Text(
                         "Meeting Lobby",
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bigText,
                       ),
-
                       const SizedBox(height: 8),
-
                       Text(
                         "Create a new room or join an existing one.",
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.mediumText.copyWith(
-                          color: Colors.grey,
-                        ),
+                        style: AppTextStyles.mediumText.copyWith(color: Colors.grey),
                       ),
-
                       const SizedBox(height: 32),
-
-                      Text(
-                        "Personal ID",
-                        style: AppTextStyles.mediumText,
-                      ),
-
+                      Text("Personal ID", style: AppTextStyles.mediumText),
                       const SizedBox(height: 10),
-
                       TextField(
                         controller: viewmodel.callerIdController,
                         decoration: InputDecoration(
@@ -196,16 +192,9 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      Text(
-                        "Meeting ID",
-                        style: AppTextStyles.mediumText,
-                      ),
-
+                      Text("Meeting ID", style: AppTextStyles.mediumText),
                       const SizedBox(height: 10),
-
                       TextField(
                         controller: viewmodel.roomCodeController,
                         decoration: InputDecoration(
@@ -222,27 +211,24 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
                       SizedBox(
                         width: double.infinity,
                         child: PrincipalButton(
                           text: "Join a Meeting",
                           onTap: () async {
-                            final foundMeeting =
-                                await viewmodel.joinRoom();
+                            final foundMeeting = await viewmodel.joinRoom();
+
+                            if (!context.mounted) return;
 
                             if (foundMeeting) {
                               Navigator.pushNamed(
                                 context,
                                 "/room",
                                 arguments: RoomPageArguments(
-                                  serverAddress: viewmodel.serverAddressSelect,
-                                  roomId:
-                                      viewmodel.roomCodeController.text,
-                                  userId:
-                                      viewmodel.callerIdController.text,
+                                  serverAddress: viewmodel.selectedServer!.address,
+                                  roomId: viewmodel.roomCodeController.text,
+                                  userId: viewmodel.callerIdController.text,
                                 ),
                               );
                             } else {
@@ -250,9 +236,7 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                                 SnackBar(
                                   content: Text(
                                     viewmodel.errorMessage,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                    ),
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                   backgroundColor: Colors.red,
                                 ),
@@ -261,62 +245,45 @@ class _MeetingLobbyPageState extends State<MeetingLobbyPage> {
                           },
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
                       if (viewmodel.isLoading)
-                        const Center(
-                          child: CircularProgressIndicator(),
-                        ),
-
+                        const Center(child: CircularProgressIndicator()),
                       const SizedBox(height: 24),
-
                       Row(
                         children: [
-                          Expanded(
-                            child: Divider(
-                              color: Colors.grey.shade300,
-                            ),
-                          ),
+                          Expanded(child: Divider(color: Colors.grey.shade300)),
                           Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                            ),
-                            child: Text(
-                              "OR",
-                              style: AppTextStyles.mediumText,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text("OR", style: AppTextStyles.mediumText),
                           ),
-                          Expanded(
-                            child: Divider(
-                              color: Colors.grey.shade300,
-                            ),
-                          ),
+                          Expanded(child: Divider(color: Colors.grey.shade300)),
                         ],
                       ),
-
                       const SizedBox(height: 24),
-
                       SecondaryButton(
                         text: "Create Room",
                         icon: Icons.video_call,
                         onTap: () async {
-                          final createRoom = await viewmodel.createRoom();
+                          final created = await viewmodel.createRoom();
 
-                          if (createRoom) {
+                          if (!context.mounted) return;
+
+                          if (created) {
                             Navigator.pushNamed(
                               context,
                               "/room",
                               arguments: RoomPageArguments(
-                                serverAddress: viewmodel.serverAddressSelect,
+                                serverAddress: viewmodel.selectedServer!.address,
                                 roomId: viewmodel.roomCodeController.text,
                                 userId: viewmodel.callerIdController.text,
                               ),
                             );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Failed to create room"),
+                              SnackBar(
+                                content: Text(viewmodel.errorMessage.isNotEmpty
+                                    ? viewmodel.errorMessage
+                                    : "Failed to create room"),
                               ),
                             );
                           }
