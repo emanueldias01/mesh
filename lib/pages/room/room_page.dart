@@ -31,6 +31,7 @@ void didChangeDependencies() {
       if (!mounted) return;
 
       context.read<RoomPageViewmodel>().connectRoom(
+        args.serverAddress,
         args.roomId,
         args.userId,
       );

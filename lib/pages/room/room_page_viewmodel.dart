@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:mesh/constants/env.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ChatMessage {
@@ -14,6 +13,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   WebSocketChannel? _channel;
   String _roomId = "";
   String _userId = "";
+  String _serverAddress = "";
 
   bool isLoading = false;
   String errorMessage = "";
@@ -65,18 +65,19 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> connectRoom(String roomId, String userId) async {
+  Future<void> connectRoom(String serverAddres,String roomId, String userId) async {
     isLoading = true;
     errorMessage = "";
     notifyListeners();
 
+    _serverAddress = serverAddres;
     _roomId = roomId;
     _userId = userId;
 
     try {
       await _initLocalMedia();
 
-      final wsBaseUrl = Env.apiUrl
+      final wsBaseUrl = serverAddres
           .replaceAll('http://', 'ws://')
           .replaceAll('https://', 'wss://');
       final url = Uri.parse('$wsBaseUrl/ws/rooms/$roomId?userId=$userId');
