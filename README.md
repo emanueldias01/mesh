@@ -7,6 +7,7 @@ Mesh is a real-time video meeting platform built with Flutter, WebRTC, and Go. I
 - Local persistence of signaling server addresses (Floor/SQLite)
 - Cross-platform support
 - WebRTC peer-to-peer connections
+- Screen cast
 ## Supported Platforms
 - Android
 - iOS
