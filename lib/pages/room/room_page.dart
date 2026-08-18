@@ -11,9 +11,28 @@ class RoomPage extends StatefulWidget {
   State<RoomPage> createState() => _RoomPageState();
 }
 
+class _TileConfig {
+  final String id;
+  final MediaStream stream;
+  final String label;
+  final bool isMuted;
+  final bool showPlaceholder;
+  final bool mirror;
+
+  _TileConfig({
+    required this.id,
+    required this.stream,
+    required this.label,
+    required this.isMuted,
+    required this.showPlaceholder,
+    required this.mirror,
+  });
+}
+
 class _RoomPageState extends State<RoomPage> {
   bool _initialized = false;
   bool _chatOpen = false;
+  String? _expandedTileId;
 
   final TextEditingController _chatController = TextEditingController();
 
@@ -24,8 +43,7 @@ class _RoomPageState extends State<RoomPage> {
     if (!_initialized) {
       _initialized = true;
 
-      final args =
-          ModalRoute.of(context)!.settings.arguments as RoomPageArguments;
+      final args = ModalRoute.of(context)!.settings.arguments as RoomPageArguments;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -75,7 +93,7 @@ class _RoomPageState extends State<RoomPage> {
                 Expanded(
                   child: Stack(
                     children: [
-                      _buildVideoGrid(viewmodel),
+                      _buildVideoArea(viewmodel),
                       if (viewmodel.errorMessage.isNotEmpty)
                         Positioned(
                           top: 8,
@@ -103,19 +121,16 @@ class _RoomPageState extends State<RoomPage> {
                   ),
               ],
             ),
-      bottomNavigationBar: viewmodel.isLoading
-          ? null
-          : _buildControlBar(viewmodel),
+      bottomNavigationBar: viewmodel.isLoading ? null : _buildControlBar(viewmodel),
     );
   }
 
-  Widget _buildVideoGrid(RoomPageViewmodel viewmodel) {
-    debugPrint('REMOTE STREAMS UI => ${viewmodel.remoteStreams.length}');
-    final tiles = <Widget>[];
+  List<_TileConfig> _buildTileConfigs(RoomPageViewmodel viewmodel) {
+    final tiles = <_TileConfig>[];
 
     if (viewmodel.localStream != null) {
-      tiles.add(StreamVideoTile(
-        key: const ValueKey('local'),
+      tiles.add(_TileConfig(
+        id: 'local_camera',
         stream: viewmodel.localStream!,
         label: "You",
         isMuted: !viewmodel.isAudioEnabled,
@@ -124,21 +139,56 @@ class _RoomPageState extends State<RoomPage> {
       ));
     }
 
-    for (final entry in viewmodel.remoteStreams.entries) {
-      debugPrint("CRIANDO TILE REMOTO => ${entry.key}");
+    if (viewmodel.screenStream != null) {
+      tiles.add(_TileConfig(
+        id: 'local_screen',
+        stream: viewmodel.screenStream!,
+        label: "You (Screen)",
+        isMuted: true,
+        showPlaceholder: false,
+        mirror: false,
+      ));
+    }
 
-      tiles.add(StreamVideoTile(
-        key: ValueKey(entry.key),
+    for (final entry in viewmodel.remoteStreams.entries) {
+      final peerId = entry.key.split('_').first;
+      tiles.add(_TileConfig(
+        id: entry.key,
         stream: entry.value,
-        label: entry.key,
+        label: peerId,
         isMuted: false,
         showPlaceholder: false,
         mirror: false,
       ));
     }
 
+    return tiles;
+  }
+
+  Widget _buildVideoArea(RoomPageViewmodel viewmodel) {
+    final tiles = _buildTileConfigs(viewmodel);
+
+    if (tiles.isEmpty) return const SizedBox.shrink();
+
+    final expandedId = tiles.any((t) => t.id == _expandedTileId) ? _expandedTileId : null;
+
+    if (expandedId != null) {
+      final tile = tiles.firstWhere((t) => t.id == expandedId);
+      return ExpandedVideoView(
+        key: ValueKey('expanded_${tile.id}'),
+        stream: tile.stream,
+        label: tile.label,
+        showPlaceholder: tile.showPlaceholder,
+        mirror: tile.mirror,
+        onClose: () => setState(() => _expandedTileId = null),
+      );
+    }
+
+    return _buildGrid(tiles);
+  }
+
+  Widget _buildGrid(List<_TileConfig> tiles) {
     final count = tiles.length;
-    if (count == 0) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -182,7 +232,20 @@ class _RoomPageState extends State<RoomPage> {
               mainAxisSpacing: spacing,
             ),
             itemCount: count,
-            itemBuilder: (context, index) => tiles[index],
+            itemBuilder: (context, index) {
+              final tile = tiles[index];
+              return GestureDetector(
+                onTap: () => setState(() => _expandedTileId = tile.id),
+                child: StreamVideoTile(
+                  key: ValueKey(tile.id),
+                  stream: tile.stream,
+                  label: tile.label,
+                  isMuted: tile.isMuted,
+                  showPlaceholder: tile.showPlaceholder,
+                  mirror: tile.mirror,
+                ),
+              );
+            },
           ),
         );
       },
@@ -314,6 +377,13 @@ class _RoomPageState extends State<RoomPage> {
             ),
             const SizedBox(width: 16),
             _controlButton(
+              icon: viewmodel.isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
+              active: viewmodel.isScreenSharing,
+              color: viewmodel.isScreenSharing ? Colors.blueAccent : null,
+              onPressed: () => viewmodel.toggleScreenShare(),
+            ),
+            const SizedBox(width: 16),
+            _controlButton(
               icon: Icons.call_end,
               active: false,
               color: Colors.red,
@@ -377,20 +447,7 @@ class _StreamVideoTileState extends State<StreamVideoTile> {
 
   Future<void> _initRenderer() async {
     await _renderer.initialize();
-
-    _renderer.onFirstFrameRendered = () {
-      debugPrint("FIRST FRAME => ${widget.label}");
-    };
-
-    _renderer.onResize = () {
-      debugPrint(
-        "RESIZE => ${widget.label} "
-        "${_renderer.videoWidth}x${_renderer.videoHeight}",
-      );
-    };
-
     _renderer.srcObject = widget.stream;
-
     if (mounted) {
       setState(() {
         _initialized = true;
@@ -462,8 +519,144 @@ class _StreamVideoTileState extends State<StreamVideoTile> {
                 ],
               ),
             ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(Icons.fullscreen, size: 16, color: Colors.white70),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ExpandedVideoView extends StatefulWidget {
+  final MediaStream stream;
+  final String label;
+  final bool showPlaceholder;
+  final bool mirror;
+  final VoidCallback onClose;
+
+  const ExpandedVideoView({
+    super.key,
+    required this.stream,
+    required this.label,
+    required this.showPlaceholder,
+    required this.mirror,
+    required this.onClose,
+  });
+
+  @override
+  State<ExpandedVideoView> createState() => _ExpandedVideoViewState();
+}
+
+class _ExpandedVideoViewState extends State<ExpandedVideoView> {
+  final RTCVideoRenderer _renderer = RTCVideoRenderer();
+  final TransformationController _transformationController = TransformationController();
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRenderer();
+  }
+
+  Future<void> _initRenderer() async {
+    await _renderer.initialize();
+    _renderer.srcObject = widget.stream;
+    if (mounted) {
+      setState(() {
+        _initialized = true;
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ExpandedVideoView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.stream != widget.stream) {
+      _renderer.srcObject = widget.stream;
+    }
+  }
+
+  @override
+  void dispose() {
+    _renderer.dispose();
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  void _resetZoom() {
+    _transformationController.value = Matrix4.identity();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (!_initialized)
+            const Center(child: CircularProgressIndicator())
+          else
+            GestureDetector(
+              onDoubleTap: _resetZoom,
+              child: InteractiveViewer(
+                transformationController: _transformationController,
+                minScale: 1.0,
+                maxScale: 5.0,
+                child: widget.showPlaceholder
+                    ? const Center(
+                        child: Icon(Icons.person, size: 120, color: Colors.white54),
+                      )
+                    : RTCVideoView(
+                        _renderer,
+                        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+                        mirror: widget.mirror,
+                      ),
+              ),
+            ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: SafeArea(
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: widget.onClose,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            bottom: 8,
+            child: SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  widget.label,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

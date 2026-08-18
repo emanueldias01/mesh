@@ -21,17 +21,22 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   final List<ChatMessage> mensagens = [];
 
   MediaStream? localStream;
+  MediaStream? screenStream;
+
   bool isAudioEnabled = true;
   bool isVideoEnabled = true;
+  bool isScreenSharing = false;
   bool _wasVideoEnabledBeforeBackground = true;
 
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, MediaStream> remoteStreams = {};
+  final Map<String, RTCRtpSender> _screenSenders = {};
 
-  static const Map<String, dynamic> _iceServers = {
+  static const Map<String, dynamic> _config = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
     ],
+    'sdpSemantics': 'unified-plan',
   };
 
   RoomPageViewmodel() {
@@ -65,7 +70,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> connectRoom(String serverAddres,String roomId, String userId) async {
+  Future<void> connectRoom(String serverAddres, String roomId, String userId) async {
     isLoading = true;
     errorMessage = "";
     notifyListeners();
@@ -120,7 +125,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final msg = jsonDecode(data as String) as Map<String, dynamic>;
       final type = msg['type'] as String?;
-      final payload = msg['payload']; 
+      final payload = msg['payload'];
 
       switch (type) {
         case 'existing-users':
@@ -167,19 +172,51 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<RTCPeerConnection> _createPeerConnection(String peerId, {required bool isOfferer}) async {
-    final pc = await createPeerConnection(_iceServers);
+    final pc = await createPeerConnection(_config);
     _peerConnections[peerId] = pc;
+
+    pc.onAddStream = (MediaStream stream) {
+      final key = '${peerId}_${stream.id}';
+      remoteStreams[key] = stream;
+      notifyListeners();
+    };
+
+    pc.onRemoveStream = (MediaStream stream) {
+      final key = '${peerId}_${stream.id}';
+      remoteStreams.remove(key);
+      notifyListeners();
+    };
+
+    pc.onTrack = (RTCTrackEvent event) {
+      if (event.streams.isNotEmpty) {
+        final stream = event.streams[0];
+        final key = '${peerId}_${stream.id}';
+        if (!remoteStreams.containsKey(key)) {
+          remoteStreams[key] = stream;
+          notifyListeners();
+        }
+      }
+    };
+
+    pc.onRemoveTrack = (MediaStream stream, MediaStreamTrack track) {
+      if (stream.getVideoTracks().isEmpty) {
+        final key = '${peerId}_${stream.id}';
+        remoteStreams.remove(key);
+        notifyListeners();
+      }
+    };
 
     localStream?.getTracks().forEach((track) {
       pc.addTrack(track, localStream!);
     });
 
-    pc.onTrack = (RTCTrackEvent event) {
-      if (event.streams.isNotEmpty) {
-        remoteStreams[peerId] = event.streams[0];
-        notifyListeners();
+    if (isScreenSharing && screenStream != null) {
+      final screenTracks = screenStream!.getVideoTracks();
+      if (screenTracks.isNotEmpty) {
+        final sender = await pc.addTrack(screenTracks.first, screenStream!);
+        _screenSenders[peerId] = sender;
       }
-    };
+    }
 
     pc.onIceCandidate = (RTCIceCandidate candidate) {
       _sendSignal('ice-candidate', peerId, {
@@ -209,7 +246,10 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _handleOffer(String peerId, Map<String, dynamic> payload) async {
-    final pc = await _createPeerConnection(peerId, isOfferer: false);
+    var pc = _peerConnections[peerId];
+    if (pc == null) {
+      pc = await _createPeerConnection(peerId, isOfferer: false);
+    }
 
     await pc.setRemoteDescription(
       RTCSessionDescription(payload['sdp'] as String, payload['type'] as String),
@@ -247,7 +287,8 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _removePeer(String peerId) async {
     final pc = _peerConnections.remove(peerId);
     await pc?.close();
-    remoteStreams.remove(peerId);
+    remoteStreams.removeWhere((key, value) => key.startsWith('${peerId}_'));
+    _screenSenders.remove(peerId);
     notifyListeners();
   }
 
@@ -256,7 +297,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     _channel!.sink.add(jsonEncode({
       'type': type,
       'to': to,
-      'payload': payload, 
+      'payload': payload,
     }));
   }
 
@@ -265,7 +306,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
 
     _channel!.sink.add(jsonEncode({
       'type': 'chat',
-      'payload': {'text': texto}, 
+      'payload': {'text': texto},
     }));
   }
 
@@ -287,7 +328,87 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> toggleScreenShare() async {
+    if (localStream == null) return;
+
+    if (isScreenSharing) {
+      await _stopScreenShare();
+    } else {
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          'video': true,
+          'audio': false,
+        });
+
+        final screenTracks = screenStream!.getVideoTracks();
+        if (screenTracks.isEmpty) return;
+        final screenTrack = screenTracks.first;
+
+        screenTrack.onEnded = () {
+          _stopScreenShare();
+        };
+
+        for (final entry in _peerConnections.entries) {
+          final peerId = entry.key;
+          final pc = entry.value;
+
+          final sender = await pc.addTrack(screenTrack, screenStream!);
+          _screenSenders[peerId] = sender;
+
+          final offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          _sendSignal('offer', peerId, {
+            'sdp': offer.sdp,
+            'type': offer.type,
+          });
+        }
+
+        isScreenSharing = true;
+        notifyListeners();
+      } catch (e) {
+        isScreenSharing = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _stopScreenShare() async {
+    if (!isScreenSharing) return;
+
+    for (final entry in _peerConnections.entries) {
+      final peerId = entry.key;
+      final pc = entry.value;
+      final sender = _screenSenders[peerId];
+      
+      if (sender != null) {
+        try {
+          await pc.removeTrack(sender);
+          final offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          _sendSignal('offer', peerId, {
+            'sdp': offer.sdp,
+            'type': offer.type,
+          });
+        } catch (e) {
+          debugPrint("Erro removendo track: $e");
+        }
+      }
+    }
+
+    _screenSenders.clear();
+
+    screenStream?.getTracks().forEach((track) => track.stop());
+    await screenStream?.dispose();
+    screenStream = null;
+    isScreenSharing = false;
+    notifyListeners();
+  }
+
   Future<void> disconnectFromRoom() async {
+    if (isScreenSharing) {
+      await _stopScreenShare();
+    }
+
     if (_channel != null) {
       _channel!.sink.close();
       _channel = null;
@@ -298,6 +419,7 @@ class RoomPageViewmodel extends ChangeNotifier with WidgetsBindingObserver {
     }
     _peerConnections.clear();
     remoteStreams.clear();
+    _screenSenders.clear();
 
     await localStream?.dispose();
     localStream = null;
